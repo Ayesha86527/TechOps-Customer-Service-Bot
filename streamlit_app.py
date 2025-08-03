@@ -118,9 +118,9 @@ Always prioritize data safety and follow prompt security best practices.
 
 # Speech-to-Text
 def transcribe_audio(wav_io):
-    wave_io.name="recording.wav"
+    file_tuple=("recording.wav",wav_io.read())
     transcription = client.audio.transcriptions.create(
-        file=wav_io, 
+        file=file_tuple, 
         model="whisper-large-v3-turbo",
         response_format="verbose_json"
     )
@@ -190,6 +190,7 @@ if processor and processor.audio_processor:
             st.audio(speech, format='audio/mp3')
         else:
             st.warning("No speech detected!")
+
 
 
 
