@@ -27,6 +27,7 @@ class DummyEmbeddings(Embeddings):
     def embed_documents(self,texts):
         raise NotImplementedError("Document Embedding is handled by pinecone")
 
+dummy_embedder=DummyEmbeddings()
 
 def set_up_dense_index(index_name):
     return PineconeVectorStore(
@@ -187,6 +188,7 @@ if processor and processor.audio_processor:
             st.audio(speech, format='audio/mp3')
         else:
             st.warning("No speech detected!")
+
 
 
 
