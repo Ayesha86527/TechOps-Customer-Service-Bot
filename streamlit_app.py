@@ -13,8 +13,8 @@ from gtts import gTTS
 from io import BytesIO
 
 # Load API keys
-pc_api_key = st.secrets("PINECONE_API_KEY")
-groq_api_key = st.secrets("GROQ_API_KEY")
+pc_api_key = st.secrets["PINECONE_API_KEY"]
+groq_api_key = st.secrets["GROQ_API_KEY"]
 
 # Initialize Pinecone & Groq clients
 pc = Pinecone(api_key=pc_api_key)
@@ -188,4 +188,5 @@ if processor and processor.audio_processor:
             st.audio(speech, format='audio/mp3')
         else:
             st.warning("No speech detected!")
+
 
