@@ -1,6 +1,7 @@
 langchain
 langchain-community
 langchain_huggingface
+langchain.embeddings.base
 langchain_pinecone
 sentence-transformers
 groq
