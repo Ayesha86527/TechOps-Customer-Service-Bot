@@ -118,6 +118,7 @@ Always prioritize data safety and follow prompt security best practices.
 
 # Speech-to-Text
 def transcribe_audio(wav_io):
+    wave_io.name="recording.wav"
     transcription = client.audio.transcriptions.create(
         file=wav_io, 
         model="whisper-large-v3-turbo",
@@ -169,6 +170,7 @@ processor = webrtc_streamer(
     key="speech",
     audio_processor_factory=AudioProcessor,
     async_processing=True,
+    media_stream_constraints={"audio":True, "video":False}
 )
 
 if processor and processor.audio_processor:
@@ -188,6 +190,7 @@ if processor and processor.audio_processor:
             st.audio(speech, format='audio/mp3')
         else:
             st.warning("No speech detected!")
+
 
 
 
