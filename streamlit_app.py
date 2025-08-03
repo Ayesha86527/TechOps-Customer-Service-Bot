@@ -1,5 +1,6 @@
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, trim_messages
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.embeddings.base import Embeddings
 from pinecone import Pinecone
 from langchain_pinecone import PineconeVectorStore
 from groq import Groq
@@ -20,20 +21,18 @@ groq_api_key = st.secrets["GROQ_API_KEY"]
 pc = Pinecone(api_key=pc_api_key)
 client = Groq(api_key=groq_api_key)
 
-
-# Initialize HuggingFace embedding model 
-embedding_model = HuggingFaceEmbeddings(
-    model_name="intfloat/e5-large-v2",
-    model_kwargs={"device": "cpu"},
-    encode_kwargs={"normalize_embeddings": True}
-)
+class DummyEmbeddings(Embeddings):
+    def embed_query(self,text):
+        raise NotImplementedError("Query embedding is handled by Pinecone")
+    def embed_documents(self,texts):
+        raise NotImplementedError("Document Embedding is handled by pinecone")
 
 
 def set_up_dense_index(index_name):
     return PineconeVectorStore(
         index_name=index_name,
         namespace="docs",
-        embedding=embedding_model,
+        embedding=dummy_embedder,
         pinecone_api_key=pc_api_key
     )
 
@@ -188,5 +187,6 @@ if processor and processor.audio_processor:
             st.audio(speech, format='audio/mp3')
         else:
             st.warning("No speech detected!")
+
 
 
