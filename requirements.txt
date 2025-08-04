@@ -1,6 +1,7 @@
 langchain
 langchain-community
 langchain_huggingface
+langchain_core
 langchain_pinecone
 sentence-transformers
 groq
@@ -11,4 +12,5 @@ soundfile
 av 
 streamlit_webrtc
 gtts
+
 
