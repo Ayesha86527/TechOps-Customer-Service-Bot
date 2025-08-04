@@ -3,6 +3,7 @@ langchain-community
 langchain_huggingface
 langchain_core
 langchain_pinecone
+tiktoken
 sentence-transformers
 groq
 streamlit
@@ -12,6 +13,7 @@ soundfile
 av 
 streamlit_webrtc
 gtts
+
 
 
 
