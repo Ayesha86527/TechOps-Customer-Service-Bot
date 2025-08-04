@@ -11,7 +11,7 @@ import soundfile as sf
 import io
 from gtts import gTTS
 from io import BytesIO
-from langchain_core.messages.utils import count_tokens
+import tiktoken  # ✅ Corrected token counter
 
 # --- Load API Keys ---
 pc_api_key = st.secrets["PINECONE_API_KEY"]
@@ -21,7 +21,12 @@ groq_api_key = st.secrets["GROQ_API_KEY"]
 pc = Pinecone(api_key=pc_api_key)
 client = Groq(api_key=groq_api_key)
 
-# --- Dummy Embedder (used only to allow Pinecone-based retrieval) ---
+# --- Token Counter ---
+def count_tokens(text, model_name="gpt-3.5-turbo"):  # you can switch to LLaMA tokenizer later
+    encoding = tiktoken.encoding_for_model(model_name)
+    return len(encoding.encode(text))
+
+# --- Dummy Embedder for Retrieval ---
 class DummyEmbeddings(Embeddings):
     def embed_query(self, text):
         raise NotImplementedError("Query embedding is handled by Pinecone")
@@ -44,7 +49,7 @@ def retrieval(vector_store, user_prompt):
     results = vector_store.similarity_search(user_prompt, k=3)
     return "\n".join([doc.page_content for doc in results])
 
-# --- Chat Completion Logic ---
+# --- Chat Completion ---
 def chat_completion(context, user_input):
     message_history.append(HumanMessage(content=user_input))
     trimmed_messages = get_trimmed_history()
@@ -62,11 +67,11 @@ def chat_completion(context, user_input):
     message_history.append(AIMessage(content=reply))
     return reply
 
-# --- Trim message history for context limits ---
+# --- Trim message history for context window ---
 def get_trimmed_history():
     return trim_messages(
         message_history,
-        token_counter=count_tokens,
+        token_counter=lambda m: count_tokens(m.content),
         max_tokens=4096,
         strategy="last",
         start_on="human",
@@ -94,9 +99,9 @@ Security Rules:
 """)
 ]
 
-# --- Transcription ---
+# --- Transcribe Audio ---
 def transcribe_audio(wav_io):
-    wav_io.name = "recording.wav"  # Groq expects a named file-like object
+    wav_io.name = "recording.wav"
     transcription = client.audio.transcriptions.create(
         file=wav_io,
         model="whisper-large-v3-turbo",
@@ -112,11 +117,12 @@ def text_to_speech(model_output):
     mp3_fp.seek(0)
     return mp3_fp
 
-# --- Setup Vector Store ---
+# --- Setup Pinecone VectorStore ---
 vector_store = set_up_dense_index("dense-index-docs")
 
-# --- Streamlit App ---
+# --- Streamlit UI ---
 st.title("TechOps Customer Service Bot")
+st.markdown("**🎤 Speak your issue and click 'Send'. The bot will reply with voice and text.**")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -138,7 +144,7 @@ class AudioProcessor(AudioProcessorBase):
     def get_full_audio(self):
         if not self.audio_buffer:
             return None
-        full_audio = np.concatenate(self.audio_buffer, axis=1)[0]  # mono channel
+        full_audio = np.concatenate(self.audio_buffer, axis=1)[0]
         buf = io.BytesIO()
         sf.write(buf, full_audio, samplerate=44100, format='WAV')
         buf.seek(0)
@@ -151,8 +157,6 @@ processor = webrtc_streamer(
     media_stream_constraints={"audio": True, "video": False},
 )
 
-st.markdown("**Speak and then click 'Send' to process your message.**")
-
 if processor and processor.audio_processor:
     if st.button("Send"):
         wav_io = processor.audio_processor.get_full_audio()
@@ -161,15 +165,20 @@ if processor and processor.audio_processor:
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
+
             context = retrieval(vector_store, prompt)
             response = chat_completion(context, prompt)
+
             st.session_state.messages.append({"role": "assistant", "content": response})
             with st.chat_message("assistant"):
                 st.markdown(response)
+
             speech = text_to_speech(response)
             st.audio(speech, format='audio/mp3')
         else:
-            st.warning("No speech detected!")
+            st.warning("No speech detected.")
+
+
 
 
 
