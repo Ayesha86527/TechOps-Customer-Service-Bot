@@ -4,7 +4,7 @@ langchain_huggingface
 langchain_core
 langchain_pinecone
 tiktoken
-sentence-transformers
+sentence_transformers
 groq
 streamlit
 pinecone
@@ -13,6 +13,7 @@ soundfile
 av 
 streamlit_webrtc
 gtts
+
 
 
 
