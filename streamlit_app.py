@@ -145,24 +145,36 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-st.subheader("🎤 Say Something")
-audio_bytes = st.audio_input("Press and speak", key="audio_input")
 
-if audio_bytes and st.button("Send", type="primary"):
+with st.form("voice_chat_form", clear_on_submit=True):
+    audio_bytes = st.audio_input("Press and speak", key="audio_input")
+    submitted = st.form_submit_button("Send")
+
+if submitted and audio_bytes:
     with st.spinner("Processing..."):
         prompt, _ = process_user_speech(audio_bytes)
 
+        # Display user message
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
+        # Retrieval + LLM
         context = retrieval(vector_store, prompt)
         response = chat_completion(context, prompt)
 
+        # Display assistant message
         st.chat_message("assistant").markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
+        # TTS
         speech = text_to_speech(response)
         if speech:
             st.audio(speech, format='audio/mp3')
+elif submitted:
+    st.warning("Please provide an audio input.")
+
+
+
 
 
 
