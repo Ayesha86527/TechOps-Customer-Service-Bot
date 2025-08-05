@@ -140,6 +140,8 @@ def process_user_speech(audio_bytes):
 st.title("TechOps Customer Support Bot")
 
 for msg in st.session_state.messages:
+    if msg["role"] == "system":
+        continue 
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
