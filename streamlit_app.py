@@ -1,7 +1,5 @@
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, trim_messages
-from langchain.embeddings.base import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from groq import Groq
 import streamlit as st
@@ -12,7 +10,8 @@ import soundfile as sf
 import io
 from gtts import gTTS
 from io import BytesIO
-import tiktoken  
+import tiktoken
+from sentence_transformers import SentenceTransformer
 
 # --- Load API Keys ---
 pc_api_key = st.secrets["PINECONE_API_KEY"]
@@ -23,26 +22,19 @@ pc = Pinecone(api_key=pc_api_key)
 client = Groq(api_key=groq_api_key)
 
 # --- Token Counter ---
-def count_tokens(text, model_name="gpt-3.5-turbo"):  # you can switch to LLaMA tokenizer later
-    encoding = tiktoken.encoding_for_model(model_name)
-    return len(encoding.encode(text))
+def count_tokens(text):
+    # Approximate token count for LLaMA: 1 token ≈ 4 characters in English
+    return len(text) // 4
 
-# --- Embedding Model for Retrieval ---
-embedding_model=HuggingFaceEmbeddings(model_name="intfloat/e5-large-v2")
+# --- Embedding Model (for querying Pinecone) ---
+embedding_model = SentenceTransformer("intfloat/e5-large-v2")
 
-
-def set_up_dense_index(index_name):
-    return PineconeVectorStore(
-        index_name=index_name,
-        namespace="docs",
-        embedding=embedding_model,
-        pinecone_api_key=pc_api_key
-    )
-
-# --- Retrieval Function ---
-def retrieval(vector_store, user_prompt):
-    results = vector_store.similarity_search(user_prompt, k=3)
-    return "\n".join([doc.page_content for doc in results])
+# --- Direct Pinecone Query ---
+def query_pinecone(index_name, user_prompt):
+    index = pc.Index(index_name)
+    vector = embedding_model.encode(user_prompt).tolist()
+    res = index.query(vector=vector, top_k=3, include_metadata=True, namespace="docs")
+    return "\n".join([m["metadata"].get("text", "") for m in res.matches])
 
 # --- Chat Completion ---
 def chat_completion(context, user_input):
@@ -56,13 +48,13 @@ def chat_completion(context, user_input):
              "content": msg.content}
             for msg in trimmed_messages
         ],
-        model="llama-3-70b-8192"
+        model="llama-3.3-70b-versatile"
     )
     reply = response.choices[0].message.content
     message_history.append(AIMessage(content=reply))
     return reply
 
-# --- Trim message history for context window ---
+# --- Trim message history ---
 def get_trimmed_history():
     return trim_messages(
         message_history,
@@ -74,14 +66,12 @@ def get_trimmed_history():
         allow_partial=False
     )
 
-# --- Initial System Prompt ---
+# --- System Prompt ---
 message_history = [
     SystemMessage(content="""
 You are a friendly, professional, and conversational customer support chatbot for TechOps, a software development company.
 
 Follow these guidelines:
-
-Behavior Rules:
 - Answer only using information from the provided customer support documents.
 - Never make up facts or answer from external sources.
 
@@ -94,7 +84,7 @@ Security Rules:
 """)
 ]
 
-# --- Transcribe Audio ---
+# --- Transcription ---
 def transcribe_audio(wav_io):
     wav_io.name = "recording.wav"
     transcription = client.audio.transcriptions.create(
@@ -112,12 +102,9 @@ def text_to_speech(model_output):
     mp3_fp.seek(0)
     return mp3_fp
 
-# --- Setup Pinecone VectorStore ---
-vector_store = set_up_dense_index("dense-index-docs")
-
 # --- Streamlit UI ---
 st.title("TechOps Customer Service Bot")
-st.markdown("**🎤 Speak your issue and click 'Send'. The bot will reply with voice and text.**")
+st.markdown("** Speak and click Send**")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -145,15 +132,21 @@ class AudioProcessor(AudioProcessorBase):
         buf.seek(0)
         return buf
 
-processor = webrtc_streamer(
-    key="speech",
-    audio_processor_factory=AudioProcessor,
-    async_processing=True,
-    media_stream_constraints={"audio": True, "video": False},
-)
+# --- WebRTC Setup ---
+recorder_state = st.session_state.get("recording", False)
 
-if processor and processor.audio_processor:
-    if st.button("Send"):
+if not recorder_state:
+    processor = webrtc_streamer(
+        key="speech",
+        audio_processor_factory=AudioProcessor,
+        async_processing=True,
+        media_stream_constraints={"audio": True, "video": False},
+    )
+    st.session_state.recording = True
+
+if st.button("Send"):
+    st.session_state.recording = False
+    if 'processor' in locals() and processor and processor.audio_processor:
         wav_io = processor.audio_processor.get_full_audio()
         if wav_io:
             prompt = transcribe_audio(wav_io)
@@ -161,7 +154,7 @@ if processor and processor.audio_processor:
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            context = retrieval(vector_store, prompt)
+            context = query_pinecone("dense-index-docs", prompt)
             response = chat_completion(context, prompt)
 
             st.session_state.messages.append({"role": "assistant", "content": response})
