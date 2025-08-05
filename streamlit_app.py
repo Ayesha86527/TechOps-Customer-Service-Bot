@@ -1,5 +1,6 @@
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, trim_messages
 from langchain.embeddings.base import Embeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone
 from groq import Groq
@@ -11,7 +12,7 @@ import soundfile as sf
 import io
 from gtts import gTTS
 from io import BytesIO
-import tiktoken  # ✅ Corrected token counter
+import tiktoken  
 
 # --- Load API Keys ---
 pc_api_key = st.secrets["PINECONE_API_KEY"]
@@ -26,21 +27,15 @@ def count_tokens(text, model_name="gpt-3.5-turbo"):  # you can switch to LLaMA t
     encoding = tiktoken.encoding_for_model(model_name)
     return len(encoding.encode(text))
 
-# --- Dummy Embedder for Retrieval ---
-class DummyEmbeddings(Embeddings):
-    def embed_query(self, text):
-        raise NotImplementedError("Query embedding is handled by Pinecone")
+# --- Embedding Model for Retrieval ---
+embedding_model=HuggingFaceEmbeddings(model_name="intfloat/e5-large-v2")
 
-    def embed_documents(self, texts):
-        raise NotImplementedError("Document Embedding is handled by Pinecone")
-
-dummy_embedder = DummyEmbeddings()
 
 def set_up_dense_index(index_name):
     return PineconeVectorStore(
         index_name=index_name,
         namespace="docs",
-        embedding=dummy_embedder,
+        embedding=embedding_model,
         pinecone_api_key=pc_api_key
     )
 
@@ -177,6 +172,7 @@ if processor and processor.audio_processor:
             st.audio(speech, format='audio/mp3')
         else:
             st.warning("No speech detected.")
+
 
 
 
